@@ -1,0 +1,25 @@
+uganda-betting-analysis/
+├── README.md
+├── requirements.txt
+├── .gitignore
+├── data/
+│   ├── raw/                 # Scraped data (odds, fixtures, results)
+│   └── processed/           # Cleaned/featured data for modeling
+├── notebooks/
+│   ├── 01_scraping.ipynb
+│   ├── 02_eda.ipynb
+│   └── 03_modeling.ipynb
+├── src/
+│   ├── scraper/
+│   │   ├── __init__.py
+│   │   ├── base_scraper.py
+│   │   └── site_scrapers.py   # Scrapers for specific sites
+│   ├── data_processing.py
+│   ├── features.py
+│   ├── model.py
+│   └── predict.py
+├── app/
+│   ├── dashboard.py          # Streamlit dashboard
+│   └── utils.py
+├── models/                   # Saved model files
+└── config.py                 # URLs, paths, settings
