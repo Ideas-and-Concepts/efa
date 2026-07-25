@@ -1,0 +1,117 @@
+# src/scraper/site_scrapers.py
+import time
+import pandas as pd
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from bs4 import BeautifulSoup
+from pathlib import Path
+from datetime import datetime
+import re
+
+class FortebetScraper:
+    def __init__(self, headless=True, delay=2):
+        self.base_url = "https://www.fortebet.ug/sports"  # main sports page
+        self.delay = delay
+        options = Options()
+        if headless:
+            options.add_argument("--headless=new")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--window-size=1920,1080")
+        options.add_argument(
+            "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        )
+        self.driver = webdriver.Chrome(options=options)
+
+    def _get_page_source(self, url):
+        """Load a page, scroll to trigger dynamic content, return HTML."""
+        self.driver.get(url)
+        time.sleep(self.delay * 2)  # initial render
+        # Scroll down in case of infinite scroll
+        last_height = self.driver.execute_script("return document.body.scrollHeight")
+        for _ in range(3):  # scroll a few times
+            self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            time.sleep(self.delay)
+            new_height = self.driver.execute_script("return document.body.scrollHeight")
+            if new_height == last_height:
+                break
+            last_height = new_height
+        return self.driver.page_source
+
+    def scrape_football_odds(self):
+        """Extract 1X2 odds for today's football matches."""
+        print(f"Loading {self.base_url} ...")
+        html = self._get_page_source(self.base_url)
+        soup = BeautifulSoup(html, "html.parser")
+        
+        # ----- UPDATE THESE SELECTORS based on actual HTML -----
+        # Example selectors (you need to replace with real ones):
+        match_rows = soup.select("div.coupon-row")  # change this!
+        if not match_rows:
+            print("No matches found with selector 'div.coupon-row'. Inspect the page and update.")
+            return pd.DataFrame()
+        
+        matches = []
+        for row in match_rows:
+            try:
+                # Extract team names
+                home_elem = row.select_one(".home-team .team-name")
+                away_elem = row.select_one(".away-team .team-name")
+                if not home_elem or not away_elem:
+                    continue
+                home = home_elem.get_text(strip=True)
+                away = away_elem.get_text(strip=True)
+                
+                # Odds for 1, X, 2 – they are often in buttons/divs
+                odds_elems = row.select(".outcome-button .odd-value")
+                if len(odds_elems) < 3:
+                    # maybe another structure
+                    odds_elems = row.select(".outcome .price")
+                if len(odds_elems) >= 3:
+                    odd_1 = float(odds_elems[0].get_text(strip=True))
+                    odd_X = float(odds_elems[1].get_text(strip=True))
+                    odd_2 = float(odds_elems[2].get_text(strip=True))
+                else:
+                    continue
+                
+                matches.append({
+                    "home_team": home,
+                    "away_team": away,
+                    "odd_1": odd_1,
+                    "odd_X": odd_X,
+                    "odd_2": odd_2,
+                    "timestamp": datetime.now().isoformat()
+                })
+            except Exception as e:
+                print(f"Error parsing a row: {e}")
+                continue
+        
+        df = pd.DataFrame(matches)
+        print(f"Scraped {len(df)} matches.")
+        return df
+
+    def save_data(self, df):
+        if df.empty:
+            print("No data to save.")
+            return
+        date_str = datetime.now().strftime("%Y-%m-%d")
+        out_dir = Path("data/raw")
+        out_dir.mkdir(parents=True, exist_ok=True)
+        filepath = out_dir / f"fortebet_{date_str}.csv"
+        df.to_csv(filepath, index=False)
+        print(f"Saved to {filepath}")
+
+    def close(self):
+        self.driver.quit()
+
+
+if __name__ == "__main__":
+    scraper = FortebetScraper()
+    try:
+        df = scraper.scrape_football_odds()
+        scraper.save_data(df)
+    finally:
+        scraper.close()
