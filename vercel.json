@@ -1,0 +1,11 @@
+{
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/app" }
+  ],
+  "functions": {
+    "app.py": {
+      "runtime": "python3.9",
+      "includeFiles": "models/rf_model.pkl"
+    }
+  }
+}
